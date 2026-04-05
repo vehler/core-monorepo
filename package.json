@@ -1,0 +1,47 @@
+{
+  "name": "core-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Monorepo starter: Hono API + SDK package + Next.js web (mobile-ready via SDK)",
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20.11.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel run dev",
+    "dev:api": "pnpm --filter @core/api run dev",
+    "dev:web": "pnpm --filter @core/web run dev",
+    "build": "pnpm -r run build",
+    "start": "pnpm -r --parallel run start",
+    "lint": "pnpm -r run lint",
+    "lint:fix": "pnpm -r run lint:fix",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json}\" --ignore-path .gitignore",
+    "format:check": "prettier --check \"**/*.{ts,tsx,md,json}\" --ignore-path .gitignore",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test",
+    "test:watch": "pnpm -r --parallel run test:watch",
+    "check": "pnpm run typecheck && pnpm run lint && pnpm run format:check && pnpm run test",
+    "clean": "pnpm -r exec rm -rf dist .next .turbo node_modules/.cache",
+    "init": "node scripts/init.mjs",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.9",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^9.1.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.2.10",
+    "prettier": "^3.4.2",
+    "prettier-plugin-tailwindcss": "^0.6.9",
+    "typescript": "^5.7.2"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "prettier --write"
+    ],
+    "*.{json,md}": [
+      "prettier --write"
+    ]
+  }
+}
