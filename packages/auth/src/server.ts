@@ -1,82 +1,85 @@
 import { betterAuth } from "better-auth";
 import { bearer } from "better-auth/plugins";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { db } from "@core/db/client";
+import { db, type Db } from "@core/db/client";
 import * as schema from "@core/db/schema";
 
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+export type AuthConfig = {
+  db: Db;
+  secret: string;
+  baseURL: string;
+  trustedOrigins: string[];
+  cookieDomain?: string;
+};
+
+// ─── Factory ─────────────────────────────────────────────────────────────────
+
 /**
- * BetterAuth server instance. Owns:
- *  - email/password auth
- *  - session management (cookie for web, bearer token for mobile)
- *  - user/session/account/verification storage via Drizzle + SQLite
+ * Create a BetterAuth instance with explicit dependencies.
+ * Use this in tests or when you need a custom configuration.
  *
- * Extension hooks (see README docs/AUTH.md for full guide):
+ * Extension hooks (see docs/AUTH.md):
  *  - socialProviders: Google / GitHub / etc
  *  - emailVerification: wire up email sender
  *  - plugins: organization(), twoFactor(), magicLink(), admin(), passkey()
  *  - databaseHooks: run logic on user create/update
  */
-export const auth = betterAuth({
-  database: drizzleAdapter(db, {
-    provider: "sqlite",
-    schema: {
-      user: schema.users,
-      session: schema.sessions,
-      account: schema.accounts,
-      verification: schema.verifications,
+export function createAuth(config: AuthConfig) {
+  return betterAuth({
+    database: drizzleAdapter(config.db, {
+      provider: "sqlite",
+      schema: {
+        user: schema.users,
+        session: schema.sessions,
+        account: schema.accounts,
+        verification: schema.verifications,
+      },
+    }),
+
+    baseURL: config.baseURL,
+    secret: config.secret,
+
+    emailAndPassword: {
+      enabled: true,
+      minPasswordLength: 8,
+      autoSignIn: true,
     },
-  }),
 
+    session: {
+      expiresIn: 60 * 60 * 24 * 30,
+      updateAge: 60 * 60 * 24,
+      cookieCache: { enabled: true, maxAge: 60 * 5 },
+    },
+
+    advanced: config.cookieDomain
+      ? { crossSubDomainCookies: { enabled: true, domain: config.cookieDomain } }
+      : undefined,
+
+    plugins: [bearer()],
+
+    trustedOrigins: config.trustedOrigins,
+  });
+}
+
+// ─── Default singleton ───────────────────────────────────────────────────────
+
+function requiredEnv(name: string): string {
+  const val = process.env[name];
+  if (!val) throw new Error(`Missing required env var: ${name}`);
+  return val;
+}
+
+export const auth = createAuth({
+  db,
+  secret: requiredEnv("BETTER_AUTH_SECRET"),
   baseURL: process.env.BETTER_AUTH_URL ?? "http://localhost:4000",
-  secret: process.env.BETTER_AUTH_SECRET!,
-
-  emailAndPassword: {
-    enabled: true,
-    minPasswordLength: 8,
-    autoSignIn: true,
-    // sendResetPassword: async ({ user, url }) => { /* wire up email */ },
-  },
-
-  // emailVerification: {
-  //   sendVerificationEmail: async ({ user, url }) => { /* wire up email */ },
-  //   sendOnSignUp: true,
-  //   requireEmailVerification: false,
-  // },
-
-  // socialProviders: {
-  //   google: {
-  //     clientId: process.env.GOOGLE_CLIENT_ID!,
-  //     clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-  //   },
-  // },
-
-  session: {
-    expiresIn: 60 * 60 * 24 * 30, // 30 days
-    updateAge: 60 * 60 * 24, // refresh cookie daily
-    cookieCache: { enabled: true, maxAge: 60 * 5 },
-  },
-
-  // Cross-subdomain cookies for staging/prod where api + web share a parent domain.
-  advanced: process.env.COOKIE_DOMAIN
-    ? {
-        crossSubDomainCookies: {
-          enabled: true,
-          domain: process.env.COOKIE_DOMAIN,
-        },
-      }
-    : undefined,
-
-  plugins: [
-    // Bearer tokens for mobile / non-browser clients.
-    // Pass `Authorization: Bearer <token>` — the token comes from the same
-    // session endpoints, so web cookies and mobile tokens share one backend.
-    bearer(),
-  ],
-
   trustedOrigins: [
     process.env.WEB_ORIGIN ?? "http://localhost:3000",
     ...(process.env.EXTRA_CORS_ORIGINS?.split(",").map((s) => s.trim()) ?? []),
   ].filter(Boolean),
+  cookieDomain: process.env.COOKIE_DOMAIN,
 });
 
 export type Auth = typeof auth;

@@ -3,16 +3,13 @@ import { vi } from "vitest";
 /**
  * Mock user for testing protected routes.
  *
- * Usage in a test file:
- *
- *   import { mockUser, mockRequireAuth } from "../../tests/helpers/mock-auth";
+ * Usage:
  *   vi.mock("../../src/middleware/auth", () => mockRequireAuth());
- *
- *   // Now any route using `requireAuth` will see `mockUser` on the context.
- *   // Override per-test:
- *   mockUser.id = "custom-id";
+ *   // Override per-test: mockUser.id = "custom-id";
+ *   // Test unauthenticated: mockUser.authenticated = false;
  */
 export const mockUser = {
+  authenticated: true,
   id: "test-user-id",
   email: "test@example.com",
   name: "Test User",
@@ -20,43 +17,49 @@ export const mockUser = {
   emailVerified: false,
 };
 
+/** Inject the mock session into the Hono context. Shared by both auth mocks. */
+function injectSession(c: { set: (k: string, v: unknown) => void }) {
+  c.set("userId", mockUser.id);
+  c.set("session", {
+    user: mockUser,
+    session: { id: "test-session-id" },
+  });
+}
+
 /**
- * Returns a vi.mock factory that replaces `requireAuth` with a middleware
- * that injects `mockUser` into the Hono context. `optionalAuth` does the same.
- *
- * Call this at the TOP of your test file (vi.mock is hoisted):
- *
+ * Factory for vi.mock. Call at the TOP of your test file (vi.mock is hoisted):
  *   vi.mock("../../src/middleware/auth", () => mockRequireAuth());
  */
 export function mockRequireAuth() {
   return {
     requireAuth: vi.fn(
       async (c: { set: (k: string, v: unknown) => void }, next: () => Promise<void>) => {
-        c.set("userId", mockUser.id);
-        c.set("session", {
-          user: mockUser,
-          session: { id: "test-session-id" },
-        });
+        if (!mockUser.authenticated) {
+          // Simulate what the real requireAuth does — return 401 JSON.
+          // Hono test context doesn't have c.json, so throw to trigger errorHandler.
+          throw Object.assign(new Error("Authentication required"), {
+            status: 401,
+            code: "UNAUTHORIZED",
+          });
+        }
+        injectSession(c);
         await next();
       },
     ),
     optionalAuth: vi.fn(
       async (c: { set: (k: string, v: unknown) => void }, next: () => Promise<void>) => {
-        c.set("userId", mockUser.id);
-        c.set("session", {
-          user: mockUser,
-          session: { id: "test-session-id" },
-        });
+        if (mockUser.authenticated) {
+          injectSession(c);
+        }
         await next();
       },
     ),
   };
 }
 
-/**
- * Reset mockUser to defaults between tests.
- */
+/** Reset mockUser to defaults between tests. */
 export function resetMockUser() {
+  mockUser.authenticated = true;
   mockUser.id = "test-user-id";
   mockUser.email = "test@example.com";
   mockUser.name = "Test User";

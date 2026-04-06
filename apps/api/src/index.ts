@@ -2,6 +2,7 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import { config, getTrustedOrigins } from "./config";
 import { errorHandler } from "./middleware/error-handler";
 import { authRateLimit, generalRateLimit } from "./middleware/rate-limit";
 import { helloRoute } from "./routes/hello";
@@ -14,25 +15,17 @@ const app = new Hono();
 
 app.use("*", logger());
 
-// CORS: only allow credentials for trusted origins.
-const trustedOrigins = new Set(
-  [
-    process.env.WEB_ORIGIN ?? "http://localhost:3000",
-    ...(process.env.EXTRA_CORS_ORIGINS?.split(",").map((s) => s.trim()) ?? []),
-  ].filter(Boolean),
-);
-
+const trusted = new Set(getTrustedOrigins());
 app.use(
   "*",
   cors({
-    origin: (origin) => (trustedOrigins.has(origin) ? origin : ""),
+    origin: (origin) => (trusted.has(origin) ? origin : ""),
     credentials: true,
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   }),
 );
 
-// Rate limiting: stricter on auth, lighter on general API.
 app.use("/api/auth/*", authRateLimit);
 app.use("*", generalRateLimit);
 
@@ -47,8 +40,7 @@ app.onError(errorHandler);
 
 // ─── Server ──────────────────────────────────────────────────────────────────
 
-const port = Number(process.env.API_PORT ?? 4000);
-serve({ fetch: app.fetch, port }, (info) => {
+serve({ fetch: app.fetch, port: config.port }, (info) => {
   console.log(`API listening on http://localhost:${info.port}`);
 });
 

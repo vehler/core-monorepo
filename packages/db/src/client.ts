@@ -5,37 +5,39 @@ import { dirname, resolve } from "node:path";
 import * as schema from "./schema";
 
 /**
- * SQLite database client via libSQL (precompiled, no native build needed).
+ * Create a database instance. Injectable for tests and alternate configs.
  *
  * DATABASE_URL examples:
- *   file:/abs/path/to/dev.db                   — local file (absolute)
+ *   file:/abs/path/to/dev.db                   — local file
  *   libsql://your-db.turso.io?authToken=...    — remote Turso (prod-ready SQLite)
  *
- * If DATABASE_URL is unset, falls back to `<packages/db>/dev.db` so the file
- * lives with the package regardless of the caller's cwd.
- *
  * Swap to Postgres:
- *   1. pnpm --filter @core/db add pg; pnpm --filter @core/db remove @libsql/client
- *   2. Replace with:
+ *   1. pnpm --filter @core/db remove @libsql/client && pnpm --filter @core/db add pg
+ *   2. Replace createDb with:
  *        import { drizzle } from "drizzle-orm/node-postgres";
  *        import { Pool } from "pg";
- *        const pool = new Pool({ connectionString: process.env.DATABASE_URL });
- *        export const db = drizzle(pool, { schema });
+ *        export function createDb(url: string) {
+ *          return drizzle(new Pool({ connectionString: url }), { schema });
+ *        }
  *   3. Update drizzle.config.ts dialect to "postgresql".
  *   4. Update schema.ts to use pgTable from "drizzle-orm/pg-core".
  *   5. Update @core/auth server.ts: provider: "sqlite" → "pg".
  */
+export function createDb(url: string, authToken?: string) {
+  const client = createClient({ url, authToken });
+  return drizzle(client, { schema });
+}
+
+export type Db = ReturnType<typeof createDb>;
+
+// ─── Default singleton ──────────────────────────────────────────────────────
 
 function defaultDbUrl(): string {
-  // src/client.ts → ../dev.db (packages/db/dev.db)
   const here = dirname(fileURLToPath(import.meta.url));
   return `file:${resolve(here, "../dev.db")}`;
 }
 
-const url = process.env.DATABASE_URL ?? defaultDbUrl();
-const authToken = process.env.DATABASE_AUTH_TOKEN;
-
-const client = createClient({ url, authToken });
-
-export const db = drizzle(client, { schema });
-export type Db = typeof db;
+export const db = createDb(
+  process.env.DATABASE_URL ?? defaultDbUrl(),
+  process.env.DATABASE_AUTH_TOKEN,
+);

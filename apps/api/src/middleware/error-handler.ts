@@ -1,17 +1,7 @@
 import type { ErrorHandler } from "hono";
 import { ZodError } from "zod";
 import { ERROR_CODES, type ApiErrorEnvelope } from "@core/core";
-
-export class HttpError extends Error {
-  constructor(
-    public status: number,
-    public code: string,
-    message: string,
-    public details?: Record<string, unknown>,
-  ) {
-    super(message);
-  }
-}
+import { HttpError } from "../errors";
 
 export const errorHandler: ErrorHandler = (err, c) => {
   if (err instanceof HttpError) {
@@ -22,11 +12,16 @@ export const errorHandler: ErrorHandler = (err, c) => {
   }
 
   if (err instanceof ZodError) {
+    // Only expose field paths, not full Zod internals.
+    const fields = err.issues.map((i) => ({
+      path: i.path.join("."),
+      message: i.message,
+    }));
     const envelope: ApiErrorEnvelope = {
       error: {
         code: ERROR_CODES.VALIDATION,
         message: "Invalid request",
-        details: { issues: err.issues },
+        details: { fields },
       },
     };
     return c.json(envelope, 400);

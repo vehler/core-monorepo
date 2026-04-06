@@ -1,6 +1,6 @@
 import { zValidator } from "@hono/zod-validator";
 import type { ZodSchema } from "zod";
-import { HttpError } from "./error-handler";
+import { HttpError } from "../errors";
 import { ERROR_CODES } from "@core/core";
 
 /**
@@ -14,9 +14,11 @@ export function validate<T extends ZodSchema>(
 ) {
   return zValidator(target, schema, (result) => {
     if (!result.success) {
-      throw new HttpError(400, ERROR_CODES.VALIDATION, "Invalid request", {
-        issues: result.error.issues,
-      });
+      const fields = result.error.issues.map((i) => ({
+        path: i.path.join("."),
+        message: i.message,
+      }));
+      throw new HttpError(400, ERROR_CODES.VALIDATION, "Invalid request", { fields });
     }
   });
 }

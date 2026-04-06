@@ -1,6 +1,6 @@
 import type { Context, Next } from "hono";
 import { auth, type AuthSession } from "@core/auth/server";
-import { HttpError } from "./error-handler";
+import { HttpError } from "../errors";
 import { ERROR_CODES } from "@core/core";
 
 declare module "hono" {

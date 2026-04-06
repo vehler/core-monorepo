@@ -1,17 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { meResource } from "./me";
-import type { HttpClient } from "../http";
-
-function mockHttp(overrides: Partial<HttpClient> = {}): HttpClient {
-  return {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-    ...overrides,
-  };
-}
+import { mockHttp } from "../../tests/mock-http";
 
 describe("meResource", () => {
   it("calls GET /me", async () => {
