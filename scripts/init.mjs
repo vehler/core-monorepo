@@ -247,8 +247,9 @@ async function main() {
   }
 
   console.log("\n✓ Done. Next steps:");
-  console.log("  pnpm install");
-  console.log("  pnpm format     # realigns markdown tables that widened from scope rename");
+  console.log("  pnpm install                        # regenerates lockfile with renamed packages");
+  console.log("  pnpm format                         # realigns markdown tables shifted by scope rename");
+  console.log("  pnpm --filter @" + scope + "/db run db:push   # create SQLite tables");
   console.log("  git init && git add -A && git commit -m 'initial commit'");
   console.log("  pnpm dev\n");
   exit(0);

@@ -115,16 +115,38 @@ All are BetterAuth plugins. Same pattern: add server plugin, add client plugin, 
 
 ## Switching from SQLite to Postgres
 
-1. `pnpm --filter @core/db remove better-sqlite3 && pnpm --filter @core/db add pg drizzle-orm/node-postgres`
+1. `pnpm --filter @core/db remove @libsql/client && pnpm --filter @core/db add pg`
 2. In `packages/db/src/client.ts`, swap to the pg driver (see the comment block in the file).
 3. In `packages/db/src/schema.ts`, replace `sqliteTable`/`text`/`integer` imports with the `pg-core` equivalents. The column types stay the same shape.
 4. In `packages/db/drizzle.config.ts`, change `dialect: "sqlite"` → `dialect: "postgresql"` and update `dbCredentials`.
 5. In `packages/auth/src/server.ts`, change `provider: "sqlite"` → `provider: "pg"`.
 6. `pnpm --filter @core/db run db:push` to apply the schema.
 
+## Security
+
+- **`BETTER_AUTH_SECRET`** must be at least 32 random bytes in production. The `init.mjs` script generates one automatically. Never use the placeholder from `.env.example`.
+- **Rate limiting** is enabled on `/api/auth/*` — 10 requests per IP per 15 minutes. Adjust in `apps/api/src/middleware/rate-limit.ts`. Swap the in-memory store for Redis in production with multiple instances.
+- **CORS** only returns `access-control-allow-origin` for origins listed in `trustedOrigins`. Credentials are only sent for trusted origins.
+- **Passwords** are hashed with scrypt (BetterAuth default). Never store or log raw passwords.
+
+## Cookie cache tradeoff
+
+Session lookup (`auth.api.getSession()`) is cached for **5 minutes** (`session.cookieCache` in server.ts). This means:
+
+- After signout, the cookie may still validate for up to 5 minutes on the API side.
+- In practice, the web client clears the cookie on signout, so re-requests won't include it.
+- For high-security apps (banking, admin panels), disable the cache:
+
+```ts
+session: {
+  cookieCache: { enabled: false },
+},
+```
+
+The tradeoff: disabling the cache means every API request hits the database for session validation instead of serving from memory.
+
 ## Notes
 
-- `BETTER_AUTH_SECRET` must be at least 32 random bytes in production. The dev default is intentionally obvious.
 - `trustedOrigins` is read at server startup. If you add a new frontend origin, restart the API.
 - Sessions are 30 days by default (`session.expiresIn` in server.ts).
-- Cookie cache is on for 5 min — `auth.api.getSession()` is fast even if called per-request.
+- Auth routes are mounted at `/api/auth/**` — BetterAuth owns that path prefix entirely.

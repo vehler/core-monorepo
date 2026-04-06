@@ -61,6 +61,42 @@ Write tests at each layer: schema validation in core, route in api, http parsing
 - Run `pnpm test` for everything, `pnpm --filter @core/sdk test` for one package.
 - Mock `fetch` at the SDK layer, not deeper. Test the API with Hono's `app.request()`.
 
+### Testing protected API routes
+
+Use the auth mock helper in `apps/api/tests/helpers/mock-auth.ts`:
+
+```ts
+import { vi, describe, it, expect, beforeEach } from "vitest";
+import { mockUser, mockRequireAuth, resetMockUser } from "../../tests/helpers/mock-auth";
+
+// Mock BEFORE importing the route (vi.mock is hoisted).
+vi.mock("../middleware/auth", () => mockRequireAuth());
+
+import { myRoute } from "./my-route";
+
+describe("GET /my-route", () => {
+  beforeEach(() => resetMockUser());
+
+  it("returns data for the authed user", async () => {
+    const app = new Hono().route("/my-route", myRoute);
+    const res = await app.request("/my-route");
+    expect(res.status).toBe(200);
+  });
+});
+```
+
+### Testing SDK resources
+
+Mock `HttpClient` — see `packages/sdk/src/resources/hello.test.ts` for the pattern:
+
+```ts
+const post = vi.fn().mockResolvedValue({ /* expected response */ });
+const http = mockHttp({ post });
+const resource = myResource(http);
+await resource.create({ ... });
+expect(post).toHaveBeenCalledWith("/my-route", { ... });
+```
+
 ## Before you finish
 
 - `pnpm check` must pass (typecheck + lint + format + test).
